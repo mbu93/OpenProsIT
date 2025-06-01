@@ -1,0 +1,10 @@
+prefix=${PWD}\\deps\\openslide-win64
+exec_prefix=${prefix}\\bin
+libdir=${prefix}\\lib
+includedir=${prefix}\\include\\openslide
+
+Name: openslide
+Description: OpenSlide - A library for reading virtual slide images
+Version: 3.4.1
+Libs: -L${libdir} -llibopenslide
+Cflags: -I${includedir}

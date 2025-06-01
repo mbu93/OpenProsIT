@@ -1,0 +1,15 @@
+torch==2.2.0
+torchvision==0.17.0
+matplotlib==3.10.3
+scikit_image==0.22.0
+scipy==1.11.4
+numpy==1.26.4
+pandas==2.1.4
+pyvips==2.1.0
+scikit-learn==1.4.2
+pydicom==3.0.1
+pylibjpeg-openjpeg==2.4.0
+pylibjpeg-libjpeg==2.3.0
+pylibjpeg==2.0.1
+gdcm==1.1
+dicom_parser==1.2.3

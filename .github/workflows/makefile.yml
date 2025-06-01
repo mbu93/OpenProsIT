@@ -1,0 +1,195 @@
+name: CI/CD
+
+on:
+  pull_request:
+    branches: [ "master" ]
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:      
+    - name: Set up environment variable for pkgconfig
+      run: echo "PWD=${GITHUB_WORKSPACE}" >> $GITHUB_ENV
+    - name: Checkout repo
+      uses: actions/checkout@main
+    - name: Get binaries
+      run: |
+        $url1 = 'https://download.pytorch.org/libtorch/cu118/libtorch-win-shared-with-deps-2.7.0%2Bcu118.zip'
+        $url2 = 'https://github.com/openslide/openslide-bin/releases/download/v20231011/openslide-win64-20231011.zip'
+        $url3 = 'https://github.com/libvips/build-win64-mxe/releases/download/v8.15.2/vips-dev-w64-all-8.15.2.zip'
+        $output1 = 'file1.zip'
+        $output2 = 'file2.zip'
+        $output3 = 'file3.zip'
+        ls deps
+        if (-Not (Test-Path -Path "deps/libtorch-2.7.0_w64")) {
+          echo "Pulling Torch deps."
+          Invoke-WebRequest -Uri $url1 -OutFile $output1
+          Expand-Archive -Path $output1 -DestinationPath 'deps/'
+          mv deps/libtorch deps/libtorch-2.7.0_w64
+        } else {
+        echo "Torch already Pulled".
+        }
+        if (-Not (Test-Path -Path "deps/openslide-win64")) {
+          echo "Pulling Openslide deps."
+          Invoke-WebRequest -Uri $url2 -OutFile $output2
+          Expand-Archive -Path $output2 -DestinationPath 'deps/'
+          mv deps/openslide-win64-20231011 deps/openslide-win64
+        } else {
+        echo "Openslide already Pulled".
+        }
+        if (-Not (Test-Path -Path "deps/vips-dev-8.15_w64")) {
+          echo "Pulling Vips deps."
+          Invoke-WebRequest -Uri $url3 -OutFile $output3
+          Expand-Archive -Path $output3 -DestinationPath 'deps/'
+          mv deps/vips-dev-8.15/ deps/vips-dev-8.15_w64
+        } else {
+        echo "Vips already Pulled".
+        }
+      shell: pwsh
+    - name: Install dependencies
+      run: |
+        $packages = @("llvm", "make", "mingw", "pkgconfiglite", "procdump")
+        foreach ($package in $packages) {
+            choco install $package -y
+        }
+      shell: pwsh
+    - name: Ensure Rust is installed
+      run: |
+        if (-not (Get-Command rustc -ErrorAction SilentlyContinue)) {
+          Invoke-WebRequest -Uri https://win.rustup.rs/x86_64 -OutFile rustup-init.exe
+          Start-Process -FilePath ./rustup-init.exe -ArgumentList "-y" -NoNewWindow -Wait
+          Remove-Item -Path ./rustup-init.exe
+        }
+        # Add rust to the PATH
+        $env:Path += ";$($env:USERPROFILE)\.cargo\bin"
+      shell: pwsh
+    - name: Set correct Python version
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11' 
+    - name: Get Models 
+      run: |
+        pip install gdown
+        # Get ISMIL backbone 
+        gdown https://drive.google.com/uc?id=1FNvPWubiwq-u0C4cGX45DuR2vd22rBb-
+        # Get ISML extractor
+        gdown https://drive.google.com/uc?id=1RQrE9GuhUenSgtxP8Qih4v7FZN0Cs30_
+        # GET MRI lesion model 
+        gdown https://drive.google.com/uc?id=1cJn866V5AyY7qrJSS-y1V9vIDPjiN1FO
+        mv wsi.backbone.pth models/
+        mv wsi.extractor.pth models/
+        mv mri.pth models/
+      shell: bash
+    - name: Python Deps 
+      run: python install_packages.py
+      shell: bash
+    - name: build exe
+      run: make build-windows-native
+      shell: bash
+    - name: test 
+      run: make test-windows-native
+      shell: bash
+    - name: Create Build
+      run: make create-windows-build
+      shell: bash
+    - name: Zip Build
+      run: Compress-Archive -Path build -DestinationPath windows.zip
+      shell: pwsh
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: build-windows-zip
+        path: windows.zip
+    - name: Upload Release Asset
+      uses: softprops/action-gh-release@v2
+      with:
+        files: windows.zip
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  test-and-build-linux:
+    # uncomment for faster local testing
+    # container: 
+    #  image: mbu93/openprosit-ubuntu:latest
+    runs-on: ubuntu-24.04
+    steps:      
+    - name: Set up environment variable for pkgconfig
+      run: echo "PWD=${GITHUB_WORKSPACE}" >> $GITHUB_ENV
+    - name: Checkout repo
+      uses: actions/checkout@main
+    - name: Get deps
+      run: |
+        export update_run=false
+        export PATH=$PATH:/root/.cargo/bin
+        # Check for and install libvips and openslide-tools if not installed
+        for package in openslide-tools libopenslide-dev libopenslide0 libvips libgtk-3-dev clang libvips-dev libvips-tools python3.12-dev; do
+            if ! dpkg -l | grep -q "$package"; then
+            if [ "$update_run" = false ]; then
+                echo "Running apt-get update..."
+                sudo apt-get update -y
+                update_run=true
+            fi
+                echo "$package is not installed. Installing..."
+                sudo apt-get update && sudo apt-get install -y "$package"
+            else
+                echo "$package is already installed."
+            fi
+        done
+        # Check if rustup is installed and install it if not
+        if ! command -v rustup > /dev/null 2>&1; then
+            echo "rustup is not installed. Installing..."
+            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+        else
+            echo "rustup is already installed. Version: $(rustup --version)"
+        fi
+
+        # Check if rustc (Rust compiler) is installed and install it if not
+        if ! command -v rustc > /dev/null 2>&1; then
+            echo "Rust compiler is not installed. Installing via rustup..."
+            rustup install stable
+        else
+            echo "Rust compiler is already installed. Version: $(rustc --version)"
+        fi
+        rustup update
+
+        wget -O torch.zip "https://download.pytorch.org/libtorch/cu118/libtorch-cxx11-abi-shared-with-deps-2.7.0%2Bcu118.zip"
+        unzip torch.zip
+        mv libtorch deps/libtorch_linux_c11
+        python install_packages.py
+    - name: Get Models 
+      run: |
+        pip install --break-system-packages gdown
+        # Get ISMIL backbone 
+        gdown https://drive.google.com/uc?id=1FNvPWubiwq-u0C4cGX45DuR2vd22rBb-
+        # Get ISML extractor
+        gdown https://drive.google.com/uc?id=1RQrE9GuhUenSgtxP8Qih4v7FZN0Cs30_
+        # GET MRI lesion model 
+        gdown https://drive.google.com/uc?id=1cJn866V5AyY7qrJSS-y1V9vIDPjiN1FO
+        mv wsi.backbone.pth models/
+        mv wsi.extractor.pth models/
+        mv mri.pth models/
+    - name: Build
+      run: |
+        export PATH=$PATH:/root/.cargo/bin
+        make build-linux
+    - name: Test 
+      run: |
+        export PATH=$PATH:/root/.cargo/bin
+        make test-linux
+    - name: Create Build
+      run: make create-linux-build
+      shell: bash
+    - name: Zip Build
+      run: zip -r linux.zip build
+      shell: bash
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: build-linux-zip
+        path: linux.zip
+    - name: Upload Release Asset
+      uses: softprops/action-gh-release@v2
+      with:
+        files: linux.zip
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,0 +1,54 @@
+[package]
+name = "rusty_slides"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "slideslib"
+
+[dependencies]
+const_env = "0.1"
+serde_json = "1.0.120"
+serde = "1.0.204"
+thiserror = "1.0.62"
+glob = "0.3.1"
+log = "0.4.20"
+native-dialog = "0.7.0"
+ndarray = "0.15.6"
+openslide-rs = "1.2.1"
+malachite-bigint = { version = "=0.1.0" }
+malachite-q = "=0.3.2"
+malachite-base = "=0.3.2"
+#pyo3 = { version = "0.20.0", features = ["extension-module", "generate-import-lib"] }
+pyo3 = "0.24.2"
+iced = {version = "0.12.0", features = ["advanced", "image"]}
+image = "0.24.7"
+iced_style = "0.12.1"
+iced_aw = { version = "0.9.3", default-features = false, features = [
+    "menu",
+    "quad",
+    "split"
+] }
+rfd = "0.12.1"
+tch = { version = "0.20.0", features = ["download-libtorch"] }
+ndarray-npy = "0.8.1"
+rand = "0.8.5"
+vips = "0.1.0-alpha.2"
+libvips = { git = "https://github.com/lotusshinoaki/libvips-rust-bindings-for-windows" }
+iced_native = "0.10.3"
+iced_tiny_skia = "0.12.1"
+lazy_static = "1.5.0"
+npyz = "0.8.0"
+
+[target.'cfg(target_arch = "i686")'.build-dependencies.openslide-sys]
+package = "openslide-sys"
+version = "1.0.1"
+features = []
+
+[target.'cfg(target_arch = "x86_64")'.build-dependencies.openslide-sys]
+package = "openslide-sys"
+version = "1.0.1"
+features = []
+
+#[target.'cfg(target_arch = "x86_64")'.dependencies]
+#pyo3 = { version = "0.20.0", features = ["extension-module", "generate-import-lib"] }

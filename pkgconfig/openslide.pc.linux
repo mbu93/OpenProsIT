@@ -1,0 +1,10 @@
+prefix=${PWD}/RustySlides/deps/openslide-win64
+exec_prefix=${prefix}/bin
+libdir=${exec_prefix}/lib
+includedir=${prefix}/include/openslide
+
+Name: openslide
+Description: OpenSlide - A library for reading virtual slide images
+Version: 3.4.1
+Libs: -L${libdir} -lopenslide
+Cflags: -I${includedir}
